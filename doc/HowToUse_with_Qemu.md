@@ -49,7 +49,7 @@
    $ cd vagrant-test
    ```
 
-1. Place Vagrantfile and EXPRESSCLUSTER files (rpm and license keys).
+1. Place Vagrantfile (copied from Vagrantfile/qemu) and EXPRESSCLUSTER files (rpm and license keys).
    ```
    $ mv /path/to/files .
    $ ls
