@@ -4,7 +4,7 @@
 ## Table of Contents
 
 * [Evaluation Environment](#evaluation-environment)
-* [Installing Vagrant and libvirt](#installing-libvirt-kvm-and-vagrant)
+* [Installing libvirt, KVM and Vagrant](#installing-libvirt-kvm-and-vagrant)
 * [Running vagrant to create 2-node cluster](#running-vagrant-to-create-2-node-cluster)
 * [Checking the created cluster](#checking-the-created-cluster)
 
