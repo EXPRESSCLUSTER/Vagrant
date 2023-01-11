@@ -72,7 +72,7 @@ Vagrant.configure("2") do |config|
     shell.inline = <<-SHELL
       echo "Disabling SELinux..."
       sed -e "s/=enforcing/=permissive/" -i.org /etc/selinux/config
-      sudo setenforce permissive
+      setenforce permissive
 
       echo "Disabling firewalld..."
       systemctl disable firewalld
@@ -140,7 +140,7 @@ Vagrant.configure("2") do |config|
       clpcfset add monparam mdnw mdnw1 relation/type cls                                > /dev/null
       clpcfset add monparam mdnw mdnw1 relation/name LocalServer                        > /dev/null
 
-      for i in `seq 12`; do
+      for i in `seq 30`; do
         echo "Checking the opposite side server... (round $i)"
         if [ $HOSTNAME == "#{servers[:s1][:hostname]}" ]; then
           curl -s "http://#{servers[:s2][:ip]}:29003" | grep "Cluster WebUI" > /dev/null
@@ -151,10 +151,10 @@ Vagrant.configure("2") do |config|
           echo "The opposite side server is ready."
           break
         fi
-        sleep 10
+        sleep 5
       done
 
-      for i in `seq 3`; do
+      for i in `seq 5`; do
         echo "Uploading clp.conf... (round $i)"
         if [ $HOSTNAME == "#{servers[:s1][:hostname]}" ]; then
           clpcfctrl --push -x . -h "#{servers[:s1][:ip]}"
@@ -164,8 +164,9 @@ Vagrant.configure("2") do |config|
         if [ $? -eq 0 ]; then
           break
         fi
-        sleep 10
+        sleep 5
       done
+      sleep 10
 
       echo "Starting EXPRESSCLUSTER daemons... (2/2)"
       systemctl restart clusterpro_webmgr
@@ -176,14 +177,14 @@ Vagrant.configure("2") do |config|
       systemctl start clusterpro_md
       systemctl start clusterpro_api
 
-      for i in `seq 12`; do
+      for i in `seq 30`; do
         echo "Waiting for Mirror Agent ready... (round $i)"
         grep "The Mirror Agent has started successfully" /var/log/messages > /dev/null
         if [ $? -eq 0 ]; then
           echo "Mirror Agent is ready."
           break
         fi
-        sleep 10
+        sleep 5
       done
 
       echo "Starting the cluster..."
