@@ -126,6 +126,15 @@
 
 ## Checking the created cluster
 
+1. Check the status of guest machines.
+   ```
+   $ vagrant status
+   Current machine states:
+
+   server1                   running (libvirt)
+   server2                   running (libvirt)
+   ```
+
 1. Login to a guest machine.
    ```
    $ vagrant ssh server1   # or server2
