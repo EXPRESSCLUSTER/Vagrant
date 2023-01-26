@@ -7,5 +7,5 @@
 
 ## Configuring 2-node cluster with EXPRESSCLUSTER preinstalled box
 
-* [with libvirt (Qemu/KVM)](doc\HowToUse_ecx_preinstalled.md)
+* [with libvirt (Qemu/KVM)](doc/HowToUse_ecx_preinstalled.md)
 
