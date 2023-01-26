@@ -1,0 +1,195 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+#=== Configurable Parameters ===#
+files = {
+  rpm: {
+    host:  "expresscls-5.0.2-1.x86_64.rpm",
+    guest: "/tmp/expresscls-5.0.2-1.x86_64.rpm"
+  },
+  license: {
+    base: {
+      host:  "base-license.key",
+      guest: "/tmp/base-license.key"
+    },
+    repl: {
+      host:  "repl-license.key",
+      guest: "/tmp/repl-license.key"
+    }
+  }
+}
+
+servers = {
+  s1: {
+    hostname: "server1",
+    ip: "192.168.122.101"
+  },
+  s2: {
+    hostname: "server2",
+    ip: "192.168.122.102"
+  }
+}
+
+cluster = {
+  fip: {
+    ip: "192.168.122.200"
+  },
+  md: {
+    disksize: "2G",  # must be 2G or larger
+    disk: "vdb",
+    cppath: "/dev/vdb1",
+    dppath: "/dev/vdb2",
+    mountpath: "/mnt",
+    filesystem: "ext4"
+  }
+}
+#=== Configurable Parameters (end) ===#
+
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/centos7"
+
+  servers.each_value do |v|
+    config.vm.define v[:hostname] do |sv|
+      sv.vm.hostname = v[:hostname]
+      sv.vm.network "private_network", ip: v[:ip]
+    end
+  end
+  
+  config.vm.provider "libvirt" do |lv|
+    lv.driver = "kvm"
+    lv.memory = "2048"
+
+    lv.storage :file, size: cluster[:md][:disksize], device: cluster[:md][:disk]
+  end
+
+  config.vm.provision "file", source: files[:rpm][:host], destination: files[:rpm][:guest]
+  config.vm.provision "file", source: files[:license][:base][:host], destination: files[:license][:base][:guest]
+  config.vm.provision "file", source: files[:license][:repl][:host], destination: files[:license][:repl][:guest]
+
+  config.vm.provision "shell" do |shell|
+    shell.privileged = true
+    shell.inline = <<-SHELL
+      echo "Disabling SELinux..."
+      sed -e "s/=enforcing/=permissive/" -i.org /etc/selinux/config
+      setenforce permissive
+
+      echo "Disabling firewalld..."
+      systemctl disable firewalld
+      systemctl stop firewalld
+
+      echo "Creating partitions for md resource..."
+      parted -s -a optimal "/dev/#{cluster[:md][:disk]}" -- mklabel gpt \
+                                                            mkpart primary 1MiB 1025MiB \
+                                                            mkpart primary 1025MiB 100%
+      mkfs.ext4 "#{cluster[:md][:dppath]}" > /dev/null
+
+      echo "Installing EXPRESSCLUSTER..."
+      rpm -i "#{files[:rpm][:guest]}"
+
+      echo "Registering licneses of EXPRESSCLUSTER..."
+      clplcnsc -i "#{files[:license][:base][:guest]}" "#{files[:license][:repl][:guest]}"
+
+      echo "Starting EXPRESSCLUSTER daemons... (1/2)"
+      systemctl start clusterpro_evt
+      systemctl start clusterpro_trn
+      systemctl start clusterpro_webmgr
+      systemctl start clusterpro_alertsync
+
+      echo "Creating clp.conf..."
+      mkdir /tmp/clp_conf_work
+      cd /tmp/clp_conf_work
+
+      clpcfset create cluster-vagrant EUC-JP                                            > /dev/null
+      clpcfset add srv "#{servers[:s1][:hostname]}" 0                                   > /dev/null
+      clpcfset add srv "#{servers[:s2][:hostname]}" 1                                   > /dev/null
+      clpcfset add device "#{servers[:s1][:hostname]}" lan 0 "#{servers[:s1][:ip]}"     > /dev/null
+      clpcfset add device "#{servers[:s2][:hostname]}" lan 0 "#{servers[:s2][:ip]}"     > /dev/null
+      clpcfset add hb lankhb 0 0                                                        > /dev/null
+
+      clpcfset add mon userw userw                                                      > /dev/null
+      clpcfset add monparam userw userw relation/type cls                               > /dev/null
+      clpcfset add monparam userw userw relation/name LocalServer                       > /dev/null
+
+      clpcfset add grp failover failover1                                               > /dev/null
+
+      clpcfset add rsc failover1 fip fip1                                               > /dev/null
+      clpcfset add rscparam fip fip1 parameters/ip "#{cluster[:fip][:ip]}"              > /dev/null
+      clpcfset add mon fipw fipw1                                                       > /dev/null
+      clpcfset add monparam fipw fipw1 target fip1                                      > /dev/null
+      clpcfset add monparam fipw fipw1 relation/type rsc                                > /dev/null
+      clpcfset add monparam fipw fipw1 relation/name fip1                               > /dev/null
+
+      clpcfset add device "#{servers[:s1][:hostname]}" mdc 0 "#{servers[:s1][:ip]}"     > /dev/null
+      clpcfset add device "#{servers[:s2][:hostname]}" mdc 0 "#{servers[:s2][:ip]}"     > /dev/null
+      clpcfset add rsc failover1 md md1                                                 > /dev/null
+      clpcfset add rscparam md md1 parameters/nmppath /dev/NMP1                         > /dev/null
+      clpcfset add rscparam md md1 parameters/mount/point "#{cluster[:md][:mountpath]}" > /dev/null
+      clpcfset add rscparam md md1 parameters/diskdev/dppath "#{cluster[:md][:dppath]}" > /dev/null
+      clpcfset add rscparam md md1 parameters/diskdev/cppath "#{cluster[:md][:cppath]}" > /dev/null
+      clpcfset add rscparam md md1 parameters/fs "#{cluster[:md][:filesystem]}"         > /dev/null
+      clpcfset add rscparam md md1 parameters/netdev@0/priority 0                       > /dev/null
+      clpcfset add rscparam md md1 parameters/netdev@0/device 0                         > /dev/null
+      clpcfset add rscparam md md1 parameters/netdev@0/mdcname mdc1                     > /dev/null
+      clpcfset add mon mdw mdw1                                                         > /dev/null
+      clpcfset add monparam mdw mdw1 parameters/object md1                              > /dev/null
+      clpcfset add monparam mdw mdw1 relation/type cls                                  > /dev/null
+      clpcfset add monparam mdw mdw1 relation/name LocalServer                          > /dev/null
+      clpcfset add mon mdnw mdnw1                                                       > /dev/null
+      clpcfset add monparam mdnw mdnw1 parameters/object md1                            > /dev/null
+      clpcfset add monparam mdnw mdnw1 relation/type cls                                > /dev/null
+      clpcfset add monparam mdnw mdnw1 relation/name LocalServer                        > /dev/null
+
+      for i in `seq 30`; do
+        echo "Checking the opposite side server... (round $i)"
+        if [ $HOSTNAME == "#{servers[:s1][:hostname]}" ]; then
+          curl -s "http://#{servers[:s2][:ip]}:29003" | grep "Cluster WebUI" > /dev/null
+        else
+          curl -s "http://#{servers[:s1][:ip]}:29003" | grep "Cluster WebUI" > /dev/null
+        fi
+        if [ $? -eq 0 ]; then
+          echo "The opposite side server is ready."
+          break
+        fi
+        sleep 5
+      done
+
+      for i in `seq 5`; do
+        echo "Uploading clp.conf... (round $i)"
+        if [ $HOSTNAME == "#{servers[:s1][:hostname]}" ]; then
+          clpcfctrl --push -x . -h "#{servers[:s1][:ip]}"
+        else
+          clpcfctrl --push -x . -h "#{servers[:s2][:ip]}"
+        fi
+        if [ $? -eq 0 ]; then
+          break
+        fi
+        sleep 5
+      done
+      sleep 10
+
+      echo "Starting EXPRESSCLUSTER daemons... (2/2)"
+      systemctl restart clusterpro_webmgr
+      systemctl restart clusterpro_alertsync
+      systemctl start clusterpro_ib
+      systemctl start clusterpro_nm
+      systemctl start clusterpro
+      systemctl start clusterpro_md
+      systemctl start clusterpro_api
+
+      for i in `seq 30`; do
+        echo "Waiting for Mirror Agent ready... (round $i)"
+        grep "The Mirror Agent has started successfully" /var/log/messages > /dev/null
+        if [ $? -eq 0 ]; then
+          echo "Mirror Agent is ready."
+          break
+        fi
+        sleep 5
+      done
+
+      echo "Starting the cluster..."
+      clpcl -s
+      echo "Finished."
+    SHELL
+  end
+end
