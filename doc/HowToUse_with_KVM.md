@@ -1,4 +1,4 @@
-# How to use with KVM
+# How to use Vagrant with KVM
 
 
 ## Table of Contents
@@ -103,19 +103,11 @@
    $ cd vagrant-test
    ```
 
-1. Place Vagrantfile (copy from [here](/Vagrantfile/qemu)) and EXPRESSCLUSTER files (rpm and license keys).
+1. Place Vagrantfile (copy from [here](/Vagrantfile/kvm)) and EXPRESSCLUSTER files (rpm and license keys).
    ```
    $ mv /path/to/files .
    $ ls
    Vagrantfile  base-license.key  expresscls-5.0.2-1.x86_64.rpm  repl-license.key
-   ```
-
-1. Edit Vagrantfile.
-   ```
-   $ vi Vagrantfile   # comment out (or delete) the following line
-   ---
-   lv.driver = "qemu"
-   ---
    ```
 
 1. Run vagrant.
